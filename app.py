@@ -61,5 +61,8 @@ if uploaded_file:
         for name, score in attendance.items():
             st.write(f"**{name}**: {score} points")
 
+        st.image(image, caption="Uploaded Screenshot", use_container_width=True)
+
+
         df = pd.DataFrame(attendance.items(), columns=["Name", "Attendance Score"])
         st.download_button("📥 Download CSV", df.to_csv(index=False), "attendance.csv", "text/csv")
