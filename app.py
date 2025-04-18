@@ -58,7 +58,7 @@ def detect_attendance(image, rows, cols):
             faces = face_cascade.detectMultiScale(gray, 1.1, 5)
 
             # Assign attendance score based on face detection
-            if name:
+            if name and "Unknown" not in name:
                 if len(faces) > 0:
                     attendance[name] = 1  # Full attendance if face is detected
                 else:
