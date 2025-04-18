@@ -5,6 +5,8 @@ import pytesseract
 import pandas as pd
 from PIL import Image
 
+pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
+
 # Tesseract executable path (change if installed elsewhere)
 pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
