@@ -1,14 +1,13 @@
 import streamlit as st
 import cv2
 import numpy as np
-import pytesseract
 import pandas as pd
 from PIL import Image
 
-pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
+import pytesseract
 
-# Tesseract executable path (change if installed elsewhere)
-pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+# Set the Tesseract executable path for GitHub Codespaces
+pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
 
 st.set_page_config(page_title="Zoom/Google Meet Attendance Tracker", layout="centered")
 st.title("📷 Zoom/Google Meet Attendance Tracker")
