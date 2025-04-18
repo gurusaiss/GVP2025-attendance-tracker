@@ -45,6 +45,7 @@ def detect_attendance(image, rows, cols):
 
     return attendance
 
+
 if uploaded_file:
     image = Image.open(uploaded_file)
     image_cv = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
@@ -60,9 +61,6 @@ if uploaded_file:
         st.subheader("📊 Attendance Report")
         for name, score in attendance.items():
             st.write(f"**{name}**: {score} points")
-
-        st.image(image, caption="Uploaded Screenshot", use_container_width=True)
-
 
         df = pd.DataFrame(attendance.items(), columns=["Name", "Attendance Score"])
         st.download_button("📥 Download CSV", df.to_csv(index=False), "attendance.csv", "text/csv")
