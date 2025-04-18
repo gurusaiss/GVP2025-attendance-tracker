@@ -8,6 +8,8 @@ import pytesseract
 # Set the Tesseract executable path for GitHub Codespaces
 pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
 
+
+
 st.set_page_config(page_title="Zoom/Google Meet Attendance Tracker", layout="centered")
 st.title("📷 Zoom/Google Meet Attendance Tracker")
 st.markdown("Upload a screenshot of your Zoom or Google Meet class in **grid view**.")
