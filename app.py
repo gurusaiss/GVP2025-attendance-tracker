@@ -25,11 +25,37 @@ def clean_name(name):
     return name
 
 # Main attendance detector
+from difflib import get_close_matches
+
+# Optional: known list of student names
+known_names = [
+    "Vedha Priya", "Koushik Naramshetti", "Mounika Boja", "Harini Sree Koreti",
+    "Harshini Pulugurtha", "Kavya Harshitha", "Syam Chagan Banisetti", 
+    "Poorna Chandra Rao Pentakota", "Aditya Vanam", "Nikhil Ropate",
+    "Ruchitha Kommineni", "Sujith Somi", "Tharun Gannamaneni", 
+    "Gnann Saketh Periyala", "Bhargavi", "Pavani Keerthi", 
+    "Yaswitha Alla", "Nanditha Donthamsetti", "Vardhan Gh", 
+    "Sushmitha Boja", "Sumith Guru Sai", "Himasri Chavali", 
+    "Vineela Malla", "Sai Varshini", "Srihas Monyam", 
+    "Santhil Priya", "Arudravihnr Bommu", "Jaswanth Musineni", 
+    "Madhusudhan Tadimeti", "Kaviyaswini Thuthika", "Hiranvika Yeminen"
+]
+
+def enhance_image(img):
+    img = cv2.resize(img, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
+    img = cv2.bilateralFilter(img, 11, 17, 17)
+    img = cv2.convertScaleAbs(img, alpha=1.5, beta=20)
+    return img
+
+def match_name(name, known_list):
+    matches = get_close_matches(name, known_list, n=1, cutoff=0.5)
+    return matches[0] if matches else name
+
 def detect_attendance(image, rows, cols):
     h, w, _ = image.shape
     grid_h, grid_w = h // rows, w // cols
-
     face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+
     attendance = {}
 
     for i in range(rows):
@@ -39,25 +65,25 @@ def detect_attendance(image, rows, cols):
             cell = image[y1:y2, x1:x2]
 
             gray = cv2.cvtColor(cell, cv2.COLOR_BGR2GRAY)
-
-            # Detect faces
             faces = face_cascade.detectMultiScale(gray, 1.1, 5)
 
-            # Extract name area (lower 35%)
-            name_area = gray[int(grid_h * 0.65):, :]
+            # Extract lower part for name (last 25%)
+            name_area = gray[int(grid_h * 0.75):, :]
+            name_area = enhance_image(name_area)
             _, name_thresh = cv2.threshold(name_area, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
-            # OCR to extract name
-            text = pytesseract.image_to_string(name_thresh, config="--psm 7")
+            text = pytesseract.image_to_string(name_thresh, config="--psm 6").strip()
             name = clean_name(text)
 
-            if not name:
+            if not name or name.startswith("Unknown"):
                 name = f"Unknown_{i}_{j}"
-                attendance[name] = 0  # fully absent
             else:
-                attendance[name] = 1 if len(faces) > 0 else 0.5
+                name = match_name(name, known_names)
+
+            attendance[name] = 1 if len(faces) > 0 else 0.5
 
     return attendance
+
 
 # UI logic
 if uploaded_file:
