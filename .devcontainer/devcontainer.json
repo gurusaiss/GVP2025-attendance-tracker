@@ -1,8 +1,13 @@
 {
   "name": "Attendance Tracker",
-  "image": "mcr.microsoft.com/devcontainers/python:3.10",
-  "postCreateCommand": "pip install -r requirements.txt && sudo apt-get update && sudo apt-get install -y tesseract-ocr",
-  "features": {
-    "ghcr.io/devcontainers/features/common-utils:1": {}
-  }
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "settings": {
+    "terminal.integrated.defaultProfile.linux": "bash"
+  },
+  "extensions": [
+    "ms-python.python"
+  ],
+  "postCreateCommand": "pip install -r requirements.txt"
 }
