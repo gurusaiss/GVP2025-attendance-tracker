@@ -1,111 +1,90 @@
 import streamlit as st
 import cv2
-import numpy as np
-import pandas as pd
-from PIL import Image
 import pytesseract
+import numpy as np
+from PIL import Image
 from difflib import get_close_matches
 
-# Set tesseract path if needed (adjust based on OS)
-pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
+# Set up Tesseract command if needed
+# pytesseract.pytesseract.tesseract_cmd = r'/usr/bin/tesseract'  # Linux
+# pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'  # Windows
 
-# Optional: Known student names to match against
+st.set_page_config(page_title="Zoom/Meet Attendance Tracker", layout="wide")
+st.title("📸 Zoom/Google Meet Attendance Tracker")
+
+# === Load Haar Cascade for face detection ===
+face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+
+# === Known student names (extract from class list) ===
 known_names = [
-    "Vedha Priya", "Koushik Naramshetti", "Mounika Boja", "Harini Sree Koreti",
-    "Harshini Pulugurtha", "Kavya Harshitha", "Syam Chagan Banisetti", 
-    "Poorna Chandra Rao Pentakota", "Aditya Vanam", "Nikhil Ropate",
-    "Ruchitha Kommineni", "Sujith Somi", "Tharun Gannamaneni", 
-    "Gnann Saketh Periyala", "Bhargavi", "Pavani Keerthi", 
-    "Yaswitha Alla", "Nanditha Donthamsetti", "Vardhan Gh", 
-    "Sushmitha Boja", "Sumith Guru Sai", "Himasri Chavali", 
-    "Vineela Malla", "Sai Varshini", "Srihas Monyam", 
-    "Santhil Priya", "Arudravihnr Bommu", "Jaswanth Musineni", 
-    "Madhusudhan Tadimeti", "Kaviyaswini Thuthika", "Hiranvika Yeminen"
+    "Vedha Priya", "Kaushik Naramsotti", "Mounica Kompella", "Harini Sree Koreti",
+    "Harshini Pulugurtha", "Kusuma Harshitha", "Mounika Boja", "Syam Chaganisetti",
+    "Poorna Chandra Rao Pentakota", "Hiranvika Yeminen", "Pavani Koerthi", 
+    "Aashasvini Thuthika", "Ruchitha Kambhampati", "Sujith Soni", "Tharun Gannamaneni",
+    "Gnan Seketh Periyala", "Bhargavi", "Sahanik Voluvati", "Yaswitha Alla", 
+    "Nanditha Donthamsetti", "Vardhan Gh", "Sushmitha Boja", "Sumith Guru Sai", 
+    "Himasri Chavali", "Vineela Malla", "Santhi Priya", "Arudra Vihari Bommma", 
+    "Jayanth Musinana", "Srihas Manyam", "Aditya Varanasi", "Nikhil Rompte"
 ]
 
-st.set_page_config(page_title="Zoom/Google Meet Attendance Tracker", layout="centered")
-st.title("📷 Zoom/Google Meet Attendance Tracker")
-st.markdown("Upload a screenshot of your Zoom or Google Meet class in **grid view**.")
+# === Helper Functions ===
+def clean_text(text):
+    return ''.join(c for c in text if c.isalnum() or c.isspace()).strip()
 
-uploaded_file = st.file_uploader("Upload Screenshot", type=["jpg", "jpeg", "png"])
+def match_name(raw_text):
+    cleaned = clean_text(raw_text)
+    matches = get_close_matches(cleaned, known_names, n=1, cutoff=0.6)
+    return matches[0] if matches else None
 
-# Cleaning and correction functions
-def clean_name(name):
-    name = name.strip().replace('\n', ' ')
-    name = name.replace('|', 'I').replace('0', 'O').replace('1', 'I')
-    name = ''.join(c for c in name if c.isalnum() or c.isspace())
-    name = " ".join(name.split()).title()
-    return name if len(name) > 2 and not name.isnumeric() else ""
+def extract_faces_and_names(image):
+    img_cv = np.array(image.convert('RGB'))
+    gray = cv2.cvtColor(img_cv, cv2.COLOR_RGB2GRAY)
+    
+    h, w = gray.shape
+    rows, cols = 5, 7  # Adjust based on layout
+    cell_h, cell_w = h // rows, w // cols
 
-def match_name(name, known_list):
-    matches = get_close_matches(name, known_list, n=1, cutoff=0.5)
-    return matches[0] if matches else name
-
-def extract_text_from_image(image):
-    config = "--oem 3 --psm 6"
-    data = pytesseract.image_to_data(image, config=config, output_type=pytesseract.Output.DICT)
-    words = []
-    for i in range(len(data["text"])):
-        try:
-            conf = int(data["conf"][i])
-        except:
-            conf = 0
-        if conf > 40 and data["text"][i].strip() != "":
-            words.append(data["text"][i].strip())
-    return " ".join(words)
-
-def detect_attendance(image, rows, cols):
-    h, w, _ = image.shape
-    grid_h, grid_w = h // rows, w // cols
-    face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
     attendance = {}
 
     for i in range(rows):
         for j in range(cols):
-            x1, y1 = j * grid_w, i * grid_h
-            x2, y2 = x1 + grid_w, y1 + grid_h
-            cell = image[y1:y2, x1:x2]
-            gray = cv2.cvtColor(cell, cv2.COLOR_BGR2GRAY)
+            y1, y2 = i * cell_h, (i + 1) * cell_h
+            x1, x2 = j * cell_w, (j + 1) * cell_w
+            cell = gray[y1:y2, x1:x2]
+            
+            # Face detection
+            faces = face_cascade.detectMultiScale(cell, scaleFactor=1.1, minNeighbors=3)
 
-            # Detect face
-            faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=4, minSize=(30, 30))
+            # OCR
+            text = pytesseract.image_to_string(cell, config="--psm 6")
+            matched_name = match_name(text)
 
-            # Focus on bottom 20% of tile (name usually appears here)
-            name_region = gray[int(grid_h * 0.80):, :]
-
-            # Enhance OCR
-            name_region = cv2.resize(name_region, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
-            name_region = cv2.bilateralFilter(name_region, 9, 75, 75)
-            name_region = cv2.equalizeHist(name_region)
-
-            text = extract_text_from_image(name_region)
-            name = clean_name(text)
-            name = match_name(name, known_names)
-
-            if name:
-                attendance[name] = 1 if len(faces) > 0 else 0.5
+            # Attendance logic
+            if matched_name:
+                score = 1 if len(faces) > 0 else 0.5
+                attendance[matched_name] = score
             else:
                 attendance[f"Unknown_{i}_{j}"] = 0
-
+    
     return attendance
 
+# === Streamlit UI ===
+uploaded_file = st.file_uploader("Upload screenshot of Zoom/Google Meet grid view", type=["png", "jpg", "jpeg"])
 
-# Main UI
 if uploaded_file:
     image = Image.open(uploaded_file)
-    image_cv = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
-    st.image(image, caption="Uploaded Screenshot", use_container_width=True)
+    st.image(image, caption="Uploaded Class Screenshot", use_column_width=True)
 
-    rows = st.number_input("Number of Rows", min_value=1, max_value=10, value=4)
-    cols = st.number_input("Number of Columns", min_value=1, max_value=10, value=9)
+    with st.spinner("Analyzing attendance..."):
+        attendance = extract_faces_and_names(image)
 
-    if st.button("Process Attendance"):
-        with st.spinner("Detecting attendance and extracting names..."):
-            attendance = detect_attendance(image_cv, int(rows), int(cols))
+    st.subheader("📊 Attendance Report")
+    for name, score in attendance.items():
+        st.write(f"**{name}** : {score} points")
 
-        st.subheader("📊 Attendance Report")
-        for name, score in attendance.items():
-            st.write(f"**{name}** : {score} points")
+    # Optional: Download attendance as CSV
+    import pandas as pd
+    df = pd.DataFrame(attendance.items(), columns=["Name", "Attendance"])
+    csv = df.to_csv(index=False).encode('utf-8')
+    st.download_button("Download CSV", csv, "attendance_report.csv", "text/csv")
 
-        df = pd.DataFrame(attendance.items(), columns=["Name", "Attendance Score"])
-        st.download_button("📥 Download CSV", df.to_csv(index=False), "attendance.csv", "text/csv")
