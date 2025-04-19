@@ -25,37 +25,11 @@ def clean_name(name):
     return name
 
 # Main attendance detector
-from difflib import get_close_matches
-
-# Optional: known list of student names
-known_names = [
-    "Vedha Priya", "Koushik Naramshetti", "Mounika Boja", "Harini Sree Koreti",
-    "Harshini Pulugurtha", "Kavya Harshitha", "Syam Chagan Banisetti", 
-    "Poorna Chandra Rao Pentakota", "Aditya Vanam", "Nikhil Ropate",
-    "Ruchitha Kommineni", "Sujith Somi", "Tharun Gannamaneni", 
-    "Gnann Saketh Periyala", "Bhargavi", "Pavani Keerthi", 
-    "Yaswitha Alla", "Nanditha Donthamsetti", "Vardhan Gh", 
-    "Sushmitha Boja", "Sumith Guru Sai", "Himasri Chavali", 
-    "Vineela Malla", "Sai Varshini", "Srihas Monyam", 
-    "Santhil Priya", "Arudravihnr Bommu", "Jaswanth Musineni", 
-    "Madhusudhan Tadimeti", "Kaviyaswini Thuthika", "Hiranvika Yeminen"
-]
-
-def enhance_image(img):
-    img = cv2.resize(img, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
-    img = cv2.bilateralFilter(img, 11, 17, 17)
-    img = cv2.convertScaleAbs(img, alpha=1.5, beta=20)
-    return img
-
-def match_name(name, known_list):
-    matches = get_close_matches(name, known_list, n=1, cutoff=0.5)
-    return matches[0] if matches else name
-
 def detect_attendance(image, rows, cols):
     h, w, _ = image.shape
     grid_h, grid_w = h // rows, w // cols
-    face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
 
+    face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
     attendance = {}
 
     for i in range(rows):
@@ -65,25 +39,25 @@ def detect_attendance(image, rows, cols):
             cell = image[y1:y2, x1:x2]
 
             gray = cv2.cvtColor(cell, cv2.COLOR_BGR2GRAY)
+
+            # Detect faces
             faces = face_cascade.detectMultiScale(gray, 1.1, 5)
 
-            # Extract lower part for name (last 25%)
-            name_area = gray[int(grid_h * 0.75):, :]
-            name_area = enhance_image(name_area)
+            # Extract name area (lower 30% to 40% - adjusted for better name capture)
+            name_area = gray[int(grid_h * 0.60):int(grid_h * 0.90), :]
             _, name_thresh = cv2.threshold(name_area, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
-            text = pytesseract.image_to_string(name_thresh, config="--psm 6").strip()
+            # OCR to extract name
+            text = pytesseract.image_to_string(name_thresh, config="--psm 7")
             name = clean_name(text)
 
-            if not name or name.startswith("Unknown"):
-                name = f"Unknown_{i}_{j}"
+            if name:
+                attendance[name] = 1 if len(faces) > 0 else 0.5
             else:
-                name = match_name(name, known_names)
-
-            attendance[name] = 1 if len(faces) > 0 else 0.5
+                # If no name is detected, mark as absent
+                attendance[f"Absent_{i}_{j}"] = 0
 
     return attendance
-
 
 # UI logic
 if uploaded_file:
@@ -91,8 +65,22 @@ if uploaded_file:
     image_cv = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
     st.image(image, caption="Uploaded Screenshot", use_container_width=True)
 
-    rows = st.number_input("Number of Rows", min_value=1, max_value=10, value=4)
-    cols = st.number_input("Number of Columns", min_value=1, max_value=10, value=9)
+    # Dynamically estimate rows and columns based on the number of faces detected
+    face_cascade_full = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+    gray_full = cv2.cvtColor(image_cv, cv2.COLOR_BGR2GRAY)
+    faces_full = face_cascade_full.detectMultiScale(gray_full, 1.1, 5)
+    num_faces = len(faces_full)
+
+    # Heuristic approach to estimate rows and columns
+    if num_faces > 0:
+        estimated_rows = int(np.sqrt(num_faces))
+        estimated_cols = (num_faces + estimated_rows - 1) // estimated_rows
+        rows = st.number_input("Number of Rows (Estimated)", min_value=1, max_value=20, value=estimated_rows)
+        cols = st.number_input("Number of Columns (Estimated)", min_value=1, max_value=20, value=estimated_cols)
+    else:
+        rows = st.number_input("Number of Rows", min_value=1, max_value=20, value=4)
+        cols = st.number_input("Number of Columns", min_value=1, max_value=20, value=9)
+
 
     if st.button("Process Attendance"):
         with st.spinner("Detecting attendance and extracting names..."):
@@ -100,7 +88,12 @@ if uploaded_file:
 
         st.subheader("📊 Attendance Report")
         for name, score in attendance.items():
-            st.write(f"**{name}**: {score} points")
+            if score == 1:
+                st.write(f"**{name}**: 1 point (Video On)")
+            elif score == 0.5:
+                st.write(f"**{name}**: 0.5 points (Video Off)")
+            elif score == 0:
+                st.write(f"**{name}**: 0 points (Absent)")
 
         df = pd.DataFrame(attendance.items(), columns=["Name", "Attendance Score"])
         st.download_button("📥 Download CSV", df.to_csv(index=False), "attendance.csv", "text/csv")
