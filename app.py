@@ -67,27 +67,28 @@ def detect_attendance(image, rows, cols):
             cell = image[y1:y2, x1:x2]
             gray = cv2.cvtColor(cell, cv2.COLOR_BGR2GRAY)
 
-            faces = face_cascade.detectMultiScale(gray, 1.1, 5)
+            # Detect face
+            faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=4, minSize=(30, 30))
 
-            name_crop_y = int(grid_h * 0.75)
-            name_area = gray[name_crop_y:, :]
+            # Focus on bottom 20% of tile (name usually appears here)
+            name_region = gray[int(grid_h * 0.80):, :]
 
-            # Preprocess
-            name_area = cv2.resize(name_area, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
-            name_area = cv2.bilateralFilter(name_area, 11, 17, 17)
-            name_area = cv2.convertScaleAbs(name_area, alpha=1.5, beta=20)
+            # Enhance OCR
+            name_region = cv2.resize(name_region, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
+            name_region = cv2.bilateralFilter(name_region, 9, 75, 75)
+            name_region = cv2.equalizeHist(name_region)
 
-            # OCR
-            text = extract_text_from_image(name_area)
+            text = extract_text_from_image(name_region)
             name = clean_name(text)
+            name = match_name(name, known_names)
 
             if name:
-                name = match_name(name, known_names)
                 attendance[name] = 1 if len(faces) > 0 else 0.5
             else:
-                attendance[f"Unknown_{i}_{j}"] = 0  # No name or face
+                attendance[f"Unknown_{i}_{j}"] = 0
 
     return attendance
+
 
 # Main UI
 if uploaded_file:
